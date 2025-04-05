@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>프린세스 꾸미기 게임</title>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #fdf6fb;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      color: #d63384;
+      margin: 1rem;
+    }
+    #controls {
+      margin: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    #controls button, #base-select {
+      padding: 8px 16px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background: #ff69b4;
+      color: white;
+      cursor: pointer;
+    }
+    #game-container {
+      display: flex;
+      width: 1600px;
+      height: 900px;
+      border: 2px solid #ccc;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      background: white;
+    }
+    #left-items, #right-items {
+      width: 240px;
+      overflow-y: auto;
+      padding: 1rem;
+      background: #fff0f6;
+    }
+    #center {
+      flex: 1;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .category {
+      font-weight: bold;
+      margin: 10px 0 5px;
+    }
+    .item-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .item {
+      width: 60px;
+      height: 60px;
+      font-size: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    #base-image {
+      max-width: 100%;
+      max-height: 100%;
+      z-index: 1;
+    }
+    .decor {
+      position: absolute;
+      font-size: 48px;
+      cursor: grab;
+      user-select: none;
+      transform-origin: center;
+      z-index: 2;
+    }
+    .selected {
+      outline: 2px dashed #ff69b4;
+    }
+  </style>
+</head>
+<body>
+  <h1>프린세스 꾸미기 게임</h1>
+  <div id="controls">
+    <label for="base-select">공주 선택:</label>
+    <select id="base-select" onchange="changeBaseImage(this.value)" value="./A_2D_digital_illustration_in_anime/manga_style_fea.png">
+      <option value="./A_2D_digital_illustration_in_anime/manga_style_fea.png">공주 1</option>
+      <option value="./A_2D_digital_illustration_in_anime-influenced_cart.png">공주 2</option>
+    </select>
+    <button onclick="resizeSelected(1.2)">크게</button>
+    <button onclick="resizeSelected(0.8)">작게</button>
+    <button onclick="rotateSelected(15)">회전</button>
+    <button onclick="flipSelected()">좌우반전</button>
+    <button onclick="deleteSelected()">삭제</button>
+    <button onclick="clearDecorations()">초기화</button>
+    <button onclick="saveAsImage()">이미지 저장</button>
+  </div>
+  <div id="game-container">
+    <div id="left-items"></div>
+    <div id="center">
+      <img id="base-image" src="" alt="Princess" />
+    </div>
+    <div id="right-items"></div>
+  </div>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const defaultImage = document.getElementById('base-select').value;
+      changeBaseImage(defaultImage);
+    });
+
+    function changeBaseImage(src) {
+      const baseImg = document.getElementById('base-image');
+      if (baseImg) {
+        baseImg.src = src;
+      }
+    }
+
+    const itemCategories = {
+      '왕관': ['👑', '🎗️', '💍', '👒'],
+      '드레스': ['👗', '🪡', '💃', '👘'],
+      '리본': ['🎀', '🧵', '🪢', '💮'],
+      '신발': ['👠', '🥿', '👡', '🩰'],
+      '꽃장식': ['🌸', '🌹', '🌺', '💐'],
+      '장신구': ['📿', '💎', '💖', '🔮'],
+      '날개': ['🪽', '👼', '🧚', '🕊️'],
+      '동물친구': ['🐇', '🐦', '🦄', '🐿️']
+    };
+    const left = document.getElementById('left-items');
+    const right = document.getElementById('right-items');
+    const center = document.getElementById('center');
+    let selectedElement = null;
+
+    function createItemButton(emoji) {
+      const btn = document.createElement('div');
+      btn.className = 'item';
+      btn.textContent = emoji;
+      btn.onclick = () => createDecor(emoji);
+      return btn;
+    }
+
+    function createDecor(emoji) {
+      const decor = document.createElement('div');
+      decor.className = 'decor';
+      decor.textContent = emoji;
+      decor.style.left = '300px';
+      decor.style.top = '200px';
+      decor.setAttribute('data-scale', '1');
+      decor.setAttribute('data-rotation', '0');
+      decor.setAttribute('data-flip', 'false');
+
+      decor.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        selectElement(decor);
+        startDrag(e, decor);
+      });
+      decor.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(decor);
+      });
+      decor.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        selectElement(decor);
+        const delta = e.deltaY < 0 ? 1.1 : 0.9;
+        let scale = parseFloat(decor.getAttribute('data-scale')) || 1;
+        scale *= delta;
+        decor.setAttribute('data-scale', scale);
+        applyTransform(decor);
+      });
+
+      center.appendChild(decor);
+      selectElement(decor);
+    }
+
+    function selectElement(el) {
+      if (selectedElement && selectedElement !== el) {
+        selectedElement.classList.remove('selected');
+      }
+      selectedElement = el;
+      if (selectedElement) selectedElement.classList.add('selected');
+    }
+
+    function resizeSelected(factor) {
+      if (!selectedElement) return;
+      let scale = parseFloat(selectedElement.getAttribute('data-scale')) || 1;
+      scale *= factor;
+      selectedElement.setAttribute('data-scale', scale);
+      applyTransform(selectedElement);
+    }
+
+    function rotateSelected(deg) {
+      if (!selectedElement) return;
+      let rotation = parseFloat(selectedElement.getAttribute('data-rotation')) || 0;
+      rotation += deg;
+      selectedElement.setAttribute('data-rotation', rotation);
+      applyTransform(selectedElement);
+    }
+
+    function flipSelected() {
+      if (!selectedElement) return;
+      let flipped = selectedElement.getAttribute('data-flip') === 'true';
+      flipped = !flipped;
+      selectedElement.setAttribute('data-flip', flipped);
+      applyTransform(selectedElement);
+    }
+
+    function deleteSelected() {
+      if (selectedElement) {
+        selectedElement.remove();
+        selectedElement = null;
+      }
+    }
+
+    function clearDecorations() {
+      document.querySelectorAll('.decor').forEach(el => el.remove());
+      selectedElement = null;
+    }
+
+    function applyTransform(el) {
+      const scale = parseFloat(el.getAttribute('data-scale')) || 1;
+      const rotation = parseFloat(el.getAttribute('data-rotation')) || 0;
+      const flip = el.getAttribute('data-flip') === 'true' ? -1 : 1;
+      el.style.transform = `scale(${flip * scale}, ${scale}) rotate(${rotation}deg)`;
+    }
+
+    function startDrag(e, el) {
+      e.preventDefault();
+      const rect = center.getBoundingClientRect();
+      const shiftX = e.clientX - rect.left - parseFloat(el.style.left || 0);
+      const shiftY = e.clientY - rect.top - parseFloat(el.style.top || 0);
+
+      el.style.transition = 'none';
+      el.style.zIndex = '1000';
+
+      function moveAt(pageX, pageY) {
+        el.style.left = pageX - rect.left - shiftX + 'px';
+        el.style.top = pageY - rect.top - shiftY + 'px';
+      }
+
+      moveAt(e.pageX, e.pageY);
+
+      function onMouseMove(e) {
+        moveAt(e.pageX, e.pageY);
+      }
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        el.style.zIndex = '2';
+      });
+    }
+
+    function saveAsImage() {
+      html2canvas(document.querySelector('#center')).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'princess_dressup.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    }
+
+    function populateItems(container, categories) {
+      categories.forEach(([name, emojis]) => {
+        const section = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'category';
+        title.textContent = name;
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        emojis.forEach(emoji => row.appendChild(createItemButton(emoji)));
+        section.appendChild(title);
+        section.appendChild(row);
+        container.appendChild(section);
+      });
+    }
+
+    const entries = Object.entries(itemCategories);
+    populateItems(left, entries.slice(0, 4));
+    populateItems(right, entries.slice(4));
+  </script>
+</body>
+</html>
